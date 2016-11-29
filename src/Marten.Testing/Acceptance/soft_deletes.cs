@@ -6,6 +6,7 @@ using Marten.Testing.Documents;
 using Marten.Util;
 using Shouldly;
 using Xunit;
+using System.Collections.Generic;
 
 namespace Marten.Testing.Acceptance
 {
@@ -17,6 +18,7 @@ namespace Marten.Testing.Acceptance
             StoreOptions(_ =>
             {
                 _.Schema.For<User>().SoftDeleted();
+                _.Schema.For<File>().SoftDeleted();
             });
         }
 
@@ -346,6 +348,42 @@ namespace Marten.Testing.Acceptance
                     .Select(x => x.UserName)
                     .ToList().ShouldHaveTheSameElementsAs("baz");
             }
+        }
+
+        [Fact]
+        public void soft_deleted_documents_work_with_linq_include()
+        {
+            theStore.Schema.EnsureStorageExists(typeof(User));
+            theStore.Schema.EnsureStorageExists(typeof(File));
+
+            using (var session = theStore.OpenSession())
+            {
+                var user = new User();
+                session.Store(user);
+                var file1 = new File() { UserId = user.Id };
+                session.Store(file1);
+                var file2 = new File() { UserId = user.Id };
+                session.Store(file2);
+                session.SaveChanges();
+                session.Delete(file2);
+                session.SaveChanges();
+
+                var users = new List<User>();
+                var files = session.Query<File>().Include(u => u.UserId, users).ToList();
+                files.Count.ShouldBe(1);
+                users.Count.ShouldBe(1);
+                files = session.Query<File>().Where(f => f.MaybeDeleted()).Include(u => u.UserId, users).ToList();
+                files.Count.ShouldBe(2);
+                files = session.Query<File>().Where(f => f.IsDeleted()).Include(u => u.UserId, users).ToList();
+                files.Count.ShouldBe(1);
+            }
+        }
+
+        public class File
+        {
+            public Guid Id { get; set; } = Guid.NewGuid();
+            public Guid UserId { get; set; }
+            public string Path { get; set; }
         }
     }
 }
