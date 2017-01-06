@@ -7,6 +7,7 @@ using Marten.Testing;
 using Marten.Testing.Documents;
 using Shouldly;
 using Xunit;
+using System.Collections.Generic;
 
 namespace Marten.Testing.Acceptance
 {
@@ -534,10 +535,31 @@ namespace Marten.Testing.Acceptance
         }
 
 
+        [Fact]
+        public async Task can_update_and_delete_related_documents()
+        {
+            var emp1 = new CoffeeShopEmployee();
+            var doc1 = new CoffeeShop();
+            doc1.Employees.Add(emp1.Id);
 
+            using (var session = theStore.OpenSession())
+            {
+                session.Store(emp1);
+                session.Store(doc1);
+                await session.SaveChangesAsync().ConfigureAwait(false);
+            }
 
+            using (var session = theStore.OpenSession(tracking: DocumentTracking.DirtyTracking))
+            {
+                var emp = session.Load<CoffeeShopEmployee>(emp1.Id);
+                var doc = session.Load<CoffeeShop>(doc1.Id);
 
+                doc.Employees.Remove(emp.Id);
+                session.Delete(emp);
 
+                await session.SaveChangesAsync().ConfigureAwait(false);
+            }
+        }
     }
 
     [UseOptimisticConcurrency]
@@ -552,9 +574,16 @@ namespace Marten.Testing.Acceptance
     {
         // Guess where I'm at as I code this?
         public string Name { get; set; } = "Starbucks";
+        public ICollection<Guid> Employees { get; set; } = new List<Guid>();
     }
     // ENDSAMPLE
 
-
+    [SoftDeleted]
+    [UseOptimisticConcurrency]
+    public class CoffeeShopEmployee
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public string Name { get; set; }
+    }
 
 }
