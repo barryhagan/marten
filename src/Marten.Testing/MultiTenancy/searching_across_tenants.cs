@@ -22,6 +22,21 @@ namespace Marten.Testing.MultiTenancy
         }
 
         [Fact]
+        public void query_with_where_against_single_tenant()
+        {
+            var expected = reds.Where(x => x.String == "Red" || x.String == "Orange").Select(x => x.Id).OrderBy(x => x).ToArray();
+
+            using (var query = theStore.QuerySession("Red"))
+            {
+                var actual = query.Query<Target>().Where(x => x.String == "Red" || x.String == "Orange")
+                                  .OrderBy(x => x.Id).Select(x => x.Id).ToArray();
+
+                actual.ShouldHaveTheSameElementsAs(expected);
+            }
+        }
+
+
+        [Fact]
         public void query_within_all_tenants()
         {
             var expected = reds.Concat(greens).Concat(blues)
